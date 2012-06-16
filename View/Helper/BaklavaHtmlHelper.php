@@ -43,17 +43,18 @@ class BaklavaHtmlHelper extends HtmlHelper {
 	}
 
 
-	public function scriptsForLayout() {
+	public function scriptsForLayout($type = null) {
 		$scripts = '';
 		$files = $this->Baklava->getCombined();
-			
-		foreach ($files as $type => $file) {
-			switch ($type) {
+
+		foreach ($files as $t => $file) {
+			if($type && $type != $t) continue;
+			switch ($t) {
 				case 'css':
 					$scripts .= parent::css($file, null, array('inline' => true));
 					break;
 				case 'js':
-					$scripts .= parent::script($file, array('inline' => true));
+					$scripts .= parent::script($file, array('inline' => true, 'defer' => true));
 					break;
 				case 'style':
 					$scripts .= parent::tag('style', $file, array('type' => 'text/css'));

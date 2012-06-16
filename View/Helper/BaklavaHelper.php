@@ -1,5 +1,5 @@
 <?php
-App::uses('AppHelper', 'View/Helper');
+App::uses('Helper', 'View/Helper');
 App::import('Lib', 'Baklava.BaklavaCompressor');
 
 class BaklavaHelper extends AppHelper {
@@ -22,10 +22,10 @@ class BaklavaHelper extends AppHelper {
 	public function __construct(View $View, array $settings = array()) {
 		parent::__construct($View, $settings);
 		
-		$this->options = array_merge(array(
+		$this->options = Set::merge(array(
 			'base_url' => $this->request->webroot . '_c',
 			'base_path' => WWW_ROOT . '_c',
-			'inline_threshold' => 1024,
+			'inline_threshold' => 512,
 			'cache_config' => 'default',
 		), $settings);
 	}
@@ -35,7 +35,7 @@ class BaklavaHelper extends AppHelper {
 			$files = array($files);
 		}
 
-		if ($cached = $this->cached($type, $files)) {
+		if (!Configure::read('debug') && $cached = $this->cached($type, $files)) {
 			return $cached;
 		}
 
@@ -60,7 +60,7 @@ class BaklavaHelper extends AppHelper {
 			}
 		}
 
-		$compressed = $this->compress($type, $content);
+		$compressed = Configure::read('debug') ? $content : $this->compress($type, $content);
 		file_put_contents($this->getFile($type, $files), $compressed);
 		return $this->getUrl($type, $files);
 	}
@@ -68,11 +68,10 @@ class BaklavaHelper extends AppHelper {
 	public function compress($type, $content) {
 		$sig = md5($content);
 
-		if ($compressed = Cache::read($sig, $this->options['cache_config'])) {
+		if (!Configure::read('debug') && $compressed = Cache::read($sig, $this->options['cache_config'])) {
 			return $compressed;
 		}
 
-		CakeLog::write('debug', 'missed '.$sig);
 		if (empty($this->compressors[$type])) {
 			$compressor = $this->options['compressors'][$type];
 			App::import($compressor['type'], $compressor['path']);
@@ -88,7 +87,7 @@ class BaklavaHelper extends AppHelper {
 		$Compressor = $this->compressors[$type];
 		$options = isset($this->options['compressors'][$type]['options']) ? $this->options['compressors'][$type]['options'] : array();
 		$compressed = $Compressor->compress($content, $options);
-		Cache::write($sig, $compressed, $this->options['cache_config']);
+		!Configure::read('debug') && Cache::write($sig, $compressed, $this->options['cache_config']);
 		return $compressed;
 	}
 
@@ -124,15 +123,17 @@ class BaklavaHelper extends AppHelper {
 	public function getCombined() {
 		$links = array();
 		$sig = array();
-
+		
 		foreach($this->files as $type => $records) {
 			if (empty($records)) {
 				continue;
 			}
 
+			$compress = array();
+
 			$files = Set::extract($records, '{n}.file');
 			$script = $this->compressFiles($type, $files);
-
+			
 			if ($script) {
 				$links[$type] = $script;
 			}
@@ -148,6 +149,7 @@ class BaklavaHelper extends AppHelper {
 	public function cached($type, array $files) {
 		$sig = $this->getSignature($type, $files);
 		$file = $this->options['base_path'] . DS . $sig . '.' . $type;
+
 		if (file_exists($file)) {
 			return $this->options['base_url'] . DS . $sig . '.' . $type;
 		}
@@ -185,6 +187,10 @@ class BaklavaHelper extends AppHelper {
 		$plugins = App::objects('plugin');
 		
 		foreach($plugins as $plugin) {
+			if (!CakePlugin::loaded($plugin)) {
+				continue;
+			}
+
 			$paths[] = App::pluginPath($plugin);
 		}
 

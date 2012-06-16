@@ -10,6 +10,11 @@ class BaklavaYuiJsCompressor implements BaklavaCompressor {
 		fwrite($handle, $input);
 		$out = shell_exec('cat '.$tmpFile.' | java -jar '.$options['jar']. ' --type js');
 		unlink($tmpFile);
-		return $out;
+
+		if ($out) {
+			return $out;
+		}
+
+		return $input;
 	}
 }
